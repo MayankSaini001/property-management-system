@@ -23,5 +23,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('isSuperAdmin', function ($user) {
             return $user->isSuperAdmin();
         });
+
+        Gate::define('isCompanyAdmin', function ($user) {
+            return $user->isCompanyAdmin();
+        });
     }
 }
