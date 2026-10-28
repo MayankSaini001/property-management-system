@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Property extends Model
 {
@@ -97,5 +98,15 @@ class Property extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+        public function roomTypes(): HasMany
+    {
+        return $this->hasMany(RoomType::class);
+    }
+
+    public function units(): HasMany
+    {
+        return $this->hasMany(Unit::class);
     }
 }

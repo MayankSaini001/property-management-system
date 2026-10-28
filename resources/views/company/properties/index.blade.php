@@ -72,7 +72,17 @@
                                     </td>
 
                                     <td class="px-4 py-4">
-                                        <div class="flex items-center gap-4 text-sm font-medium">
+                                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium">
+                                            @if ($property->type === 'hotel')
+                                                <a href="{{ route('company.room-types.index', $property) }}"
+                                                    class="text-gray-600 hover:text-gray-900">Room Types</a>
+                                            @endif
+
+                                            <a href="{{ route('company.units.index', $property) }}"
+                                                class="text-gray-600 hover:text-gray-900">
+                                                {{ $property->type === 'hotel' ? 'Rooms' : 'Units' }}
+                                            </a>
+
                                             <a href="{{ route('company.properties.edit', $property) }}"
                                                 class="text-indigo-600 hover:text-indigo-800">Edit</a>
 
