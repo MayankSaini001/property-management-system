@@ -15,18 +15,43 @@ use Illuminate\View\View;
 class UnitController extends Controller
 {
     /**
-     * List rooms (hotel) or units (villa) of one property.
+     * List rooms (hotel) or units (villa) of one property, with search and filters.
      */
-    public function index(Property $property): View
+    public function index(Request $request, Property $property): View
     {
         Gate::authorize('viewAny', [Unit::class, $property]);
 
+        $today = now($property->timezone)->toDateString();
+
         $units = $property->units()
             ->with('roomType')
+            ->withCount([
+                'blocks as blocked_now' => function ($block) use ($today) {
+                    $block->whereDate('start_date', '<=', $today)
+                        ->whereDate('end_date', '>=', $today);
+                },
+            ])
+            ->when($request->filled('q'), function ($query) use ($request) {
+                $query->where('name', 'like', '%' . $request->input('q') . '%');
+            })
+            ->when(
+                $request->filled('status') && array_key_exists($request->input('status'), Unit::statuses()),
+                function ($query) use ($request) {
+                    $query->where('status', $request->input('status'));
+                }
+            )
+            ->when($request->filled('room_type_id'), function ($query) use ($request) {
+                $query->where('room_type_id', (int) $request->input('room_type_id'));
+            })
             ->orderBy('name')
-            ->paginate(15);
+            ->paginate(15)
+            ->withQueryString();
 
-        return view('company.units.index', compact('property', 'units'));
+        $roomTypes = $property->type === 'hotel'
+            ? $property->roomTypes()->orderBy('name')->get()
+            : collect();
+
+        return view('company.units.index', compact('property', 'units', 'roomTypes'));
     }
 
     /**

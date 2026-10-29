@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Company\InventoryBlockController;
 use App\Http\Controllers\Company\PropertyController;
 use App\Http\Controllers\Company\RoomTypeController;
 use App\Http\Controllers\Company\UnitController;
@@ -79,6 +80,17 @@ Route::middleware(['auth', 'verified', 'active.company', 'can:isCompanyAdmin'])
             ->name('units.update');
         Route::patch('units/{unit}/status', [UnitController::class, 'updateStatus'])
             ->name('units.status');
+
+        // Maintenance and owner-use blocks
+        Route::get('properties/{property}/blocks', [InventoryBlockController::class, 'index'])
+            ->name('blocks.index');
+        Route::get('properties/{property}/blocks/create', [InventoryBlockController::class, 'create'])
+            ->name('blocks.create');
+        Route::post('properties/{property}/blocks', [InventoryBlockController::class, 'store'])
+            ->name('blocks.store');
+
+        Route::delete('blocks/{block}', [InventoryBlockController::class, 'destroy'])
+            ->name('blocks.destroy');
     });
 
 require __DIR__ . '/auth.php';

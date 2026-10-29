@@ -109,4 +109,9 @@ class Property extends Model
     {
         return $this->hasMany(Unit::class);
     }
+
+        public function inventoryBlocks(): HasMany
+    {
+        return $this->hasMany(InventoryBlock::class);
+    }
 }

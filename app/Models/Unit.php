@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Unit extends Model
@@ -54,6 +55,25 @@ class Unit extends Model
         return $this->status === 'available';
     }
 
+    /**
+     * Units whose status allows selling.
+     */
+    public function scopeBookable($query)
+    {
+        return $query->where('status', 'available');
+    }
+
+    /**
+     * Units without any maintenance / owner-use block in the stay dates.
+     * Used by the availability search (check-out day is free).
+     */
+    public function scopeFreeBetween($query, $checkIn, $checkOut)
+    {
+        return $query->whereDoesntHave('blocks', function ($block) use ($checkIn, $checkOut) {
+            $block->overlapping($checkIn, $checkOut);
+        });
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
@@ -67,5 +87,10 @@ class Unit extends Model
     public function roomType(): BelongsTo
     {
         return $this->belongsTo(RoomType::class);
+    }
+
+    public function blocks(): HasMany
+    {
+        return $this->hasMany(InventoryBlock::class);
     }
 }
