@@ -20,7 +20,7 @@
     </x-slot>
 
     <div class="min-h-[75vh] bg-gradient-to-b from-indigo-50 via-slate-50 to-white py-10">
-        <div class="mx-auto max-w-7xl space-y-6 px-6 lg:px-8">
+        <div class="mx-auto max-w-none space-y-6 px-6 lg:px-8">
 
             {{-- Page heading --}}
             <div class="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">

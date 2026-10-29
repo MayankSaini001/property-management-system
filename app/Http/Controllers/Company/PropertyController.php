@@ -14,19 +14,51 @@ use Illuminate\View\View;
 class PropertyController extends Controller
 {
     /**
-     * List properties of the logged-in Company Admin's company only.
+     * List properties of the logged-in Company Admin's company only,
+     * with live search and filters.
      */
     public function index(Request $request): View
     {
         Gate::authorize('viewAny', Property::class);
 
-        $properties = $request->user()
-            ->company
-            ->properties()
-            ->latest()
-            ->paginate(10);
+        $company = $request->user()->company;
 
-        return view('company.properties.index', compact('properties'));
+        $properties = $company->properties()
+            ->withCount(['units', 'roomTypes'])
+            ->when($request->filled('q'), function ($query) use ($request) {
+                $term = '%' . $request->input('q') . '%';
+
+                $query->where(function ($inner) use ($term) {
+                    $inner->where('name', 'like', $term)
+                        ->orWhere('city', 'like', $term)
+                        ->orWhere('email', 'like', $term);
+                });
+            })
+            ->when(
+                $request->filled('type') && array_key_exists($request->input('type'), Property::types()),
+                function ($query) use ($request) {
+                    $query->where('type', $request->input('type'));
+                }
+            )
+            ->when(
+                in_array($request->input('status'), ['active', 'inactive'], true),
+                function ($query) use ($request) {
+                    $query->where('status', $request->input('status'));
+                }
+            )
+            ->latest()
+            ->paginate(9)
+            ->withQueryString();
+
+        // Summary numbers for the cards (not affected by the filters).
+        $stats = [
+            'total' => $company->properties()->count(),
+            'hotels' => $company->properties()->where('type', 'hotel')->count(),
+            'villas' => $company->properties()->where('type', 'villa')->count(),
+            'active' => $company->properties()->where('status', 'active')->count(),
+        ];
+
+        return view('company.properties.index', compact('properties', 'stats'));
     }
 
     /**
@@ -98,6 +130,7 @@ class PropertyController extends Controller
 
     /**
      * Activate / deactivate a property (no deleting, so booking history stays safe).
+     * Goes back to the same page, so the search and filters stay as they were.
      */
     public function toggleStatus(Property $property): RedirectResponse
     {
@@ -107,14 +140,12 @@ class PropertyController extends Controller
             'status' => $property->isActive() ? 'inactive' : 'active',
         ]);
 
-        return redirect()
-            ->route('company.properties.index')
-            ->with(
-                'success',
-                $property->isActive()
-                    ? 'Property activated successfully.'
-                    : 'Property deactivated successfully.'
-            );
+        return back()->with(
+            'success',
+            $property->isActive()
+                ? 'Property activated successfully.'
+                : 'Property deactivated successfully.'
+        );
     }
 
     /**

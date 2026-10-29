@@ -7,7 +7,7 @@
     </x-slot>
 
     <div class="py-10">
-        <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-none sm:px-6 lg:px-8">
 
             {{-- Page heading and Add Company button --}}
             <div class="mb-6 flex items-center justify-between">
