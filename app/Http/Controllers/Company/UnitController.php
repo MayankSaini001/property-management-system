@@ -15,7 +15,7 @@ use Illuminate\View\View;
 class UnitController extends Controller
 {
     /**
-     * List rooms (hotel) or units (villa) of one property, with search and filters.
+     * List rooms (hotel) or units (villa) of one property, with live search and filters.
      */
     public function index(Request $request, Property $property): View
     {
@@ -51,7 +51,26 @@ class UnitController extends Controller
             ? $property->roomTypes()->orderBy('name')->get()
             : collect();
 
-        return view('company.units.index', compact('property', 'units', 'roomTypes'));
+        // Summary numbers for the cards (not affected by the filters).
+        $counts = $property->units()
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $stats = [
+            'total' => (int) $counts->sum(),
+            'available' => (int) ($counts['available'] ?? 0),
+            'maintenance' => (int) ($counts['maintenance'] ?? 0),
+            'out_of_service' => (int) ($counts['out_of_service'] ?? 0),
+            'blocked_now' => $property->units()
+                ->whereHas('blocks', function ($block) use ($today) {
+                    $block->whereDate('start_date', '<=', $today)
+                        ->whereDate('end_date', '>=', $today);
+                })
+                ->count(),
+        ];
+
+        return view('company.units.index', compact('property', 'units', 'roomTypes', 'stats'));
     }
 
     /**
@@ -136,6 +155,7 @@ class UnitController extends Controller
 
     /**
      * Quick status change from the list (available / out of service / maintenance).
+     * Goes back to the same page, so the search and filters stay as they were.
      */
     public function updateStatus(Request $request, Unit $unit): RedirectResponse
     {
@@ -147,9 +167,7 @@ class UnitController extends Controller
 
         $unit->update($validated);
 
-        return redirect()
-            ->route('company.units.index', $unit->property_id)
-            ->with('success', 'Status changed to ' . Unit::statuses()[$unit->status] . '.');
+        return back()->with('success', 'Status changed to ' . Unit::statuses()[$unit->status] . '.');
     }
 
     /**
