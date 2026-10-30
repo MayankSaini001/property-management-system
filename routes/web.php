@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Company\GuestController;
 use App\Http\Controllers\Company\InventoryBlockController;
 use App\Http\Controllers\Company\PropertyController;
 use App\Http\Controllers\Company\RoomTypeController;
@@ -91,6 +92,10 @@ Route::middleware(['auth', 'verified', 'active.company', 'can:isCompanyAdmin'])
 
         Route::delete('blocks/{block}', [InventoryBlockController::class, 'destroy'])
             ->name('blocks.destroy');
+
+        // Guests
+        Route::resource('guests', GuestController::class)
+            ->except(['destroy']);
     });
 
 require __DIR__ . '/auth.php';
