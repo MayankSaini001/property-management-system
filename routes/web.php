@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Company\AvailabilityController;
 use App\Http\Controllers\Company\GuestController;
 use App\Http\Controllers\Company\InventoryBlockController;
 use App\Http\Controllers\Company\PropertyController;
@@ -96,6 +97,10 @@ Route::middleware(['auth', 'verified', 'active.company', 'can:isCompanyAdmin'])
         // Guests
         Route::resource('guests', GuestController::class)
             ->except(['destroy']);
+
+        // Availability search
+        Route::get('availability', [AvailabilityController::class, 'index'])
+            ->name('availability.index');
     });
 
 require __DIR__ . '/auth.php';
