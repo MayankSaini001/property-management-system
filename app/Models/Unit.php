@@ -74,6 +74,21 @@ class Unit extends Model
         });
     }
 
+    /**
+     * Units without an active reservation in the stay dates.
+     * The check-out day is free for the next guest.
+     */
+    public function scopeNotReserved($query, $checkIn, $checkOut)
+    {
+        return $query->whereDoesntHave('reservationItems', function ($item) use ($checkIn, $checkOut) {
+            $item->whereDate('check_in', '<', $checkOut)
+                ->whereDate('check_out', '>', $checkIn)
+                ->whereHas('reservation', function ($reservation) {
+                    $reservation->whereIn('status', Reservation::ACTIVE_STATUSES);
+                });
+        });
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
@@ -92,5 +107,10 @@ class Unit extends Model
     public function blocks(): HasMany
     {
         return $this->hasMany(InventoryBlock::class);
+    }
+
+    public function reservationItems(): HasMany
+    {
+        return $this->hasMany(ReservationItem::class);
     }
 }

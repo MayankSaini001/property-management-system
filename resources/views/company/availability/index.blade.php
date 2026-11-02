@@ -195,7 +195,22 @@
                             </div>
                         @endif
 
-                        <p class="text-xs text-slate-400">Rates and booking will be added with the Pricing and Reservations modules.</p>
+                        @if ($availableCount > 0)
+                            <div class="flex items-center justify-between gap-3">
+                                <p class="text-xs text-slate-400">Rates will be added with the Pricing module.</p>
+
+                                <a href="{{ route('company.reservations.create', [
+                                        'property_id' => $search['property']->id,
+                                        'check_in' => $search['check_in']->toDateString(),
+                                        'check_out' => $search['check_out']->toDateString(),
+                                        'adults' => $search['adults'],
+                                        'children' => $search['children'],
+                                    ]) }}"
+                                    class="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-indigo-600 hover:to-violet-600">
+                                    Book these dates
+                                </a>
+                            </div>
+                        @endif
 
                         {{-- Not available --}}
                         @if ($unavailableCount > 0)
