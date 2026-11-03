@@ -55,6 +55,10 @@
                 <form id="reservation-search" method="GET" action="{{ route('company.reservations.create') }}"
                     class="grid grid-cols-1 items-end gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 md:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_0.8fr_0.8fr_auto]">
 
+                    @if (request()->filled('guest'))
+                        <input type="hidden" name="guest" value="{{ request('guest') }}">
+                    @endif
+
                     <div>
                         <label for="property_id" class="{{ $label }}">Property</label>
                         <select id="property_id" name="property_id" class="{{ $field }} w-full">

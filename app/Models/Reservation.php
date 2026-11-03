@@ -30,6 +30,9 @@ class Reservation extends Model
         'currency',
         'total_amount',
         'notes',
+        'checked_in_at',
+        'checked_out_at',
+        'no_show_at',
         'cancelled_at',
         'cancellation_reason',
         'created_by',
@@ -38,6 +41,9 @@ class Reservation extends Model
     protected $casts = [
         'check_in' => 'date',
         'check_out' => 'date',
+        'checked_in_at' => 'datetime',
+        'checked_out_at' => 'datetime',
+        'no_show_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'total_amount' => 'decimal:2',
     ];
@@ -74,6 +80,21 @@ class Reservation extends Model
         return $this->status === 'confirmed';
     }
 
+    public function canCheckIn(): bool
+    {
+        return $this->status === 'confirmed';
+    }
+
+    public function canMarkNoShow(): bool
+    {
+        return $this->status === 'confirmed';
+    }
+
+    public function canCheckOut(): bool
+    {
+        return $this->status === 'checked_in';
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
@@ -97,5 +118,10 @@ class Reservation extends Model
     public function items(): HasMany
     {
         return $this->hasMany(ReservationItem::class);
+    }
+
+    public function statusHistories(): HasMany
+    {
+        return $this->hasMany(ReservationStatusHistory::class)->orderBy('id');
     }
 }

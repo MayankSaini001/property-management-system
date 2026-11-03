@@ -274,6 +274,14 @@ class ReservationController extends Controller
                 ]);
             }
 
+            $reservation->statusHistories()->create([
+                'company_id' => $property->company_id,
+                'old_status' => null,
+                'new_status' => 'confirmed',
+                'note' => 'Reservation created',
+                'changed_by' => $request->user()->id,
+            ]);
+
             return $reservation;
         });
 
@@ -289,9 +297,89 @@ class ReservationController extends Controller
     {
         Gate::authorize('view', $reservation);
 
-        $reservation->load(['guest', 'property', 'creator', 'items.unit.roomType']);
+        $reservation->load(['guest', 'property', 'creator', 'items.unit.roomType', 'statusHistories.user']);
 
         return view('company.reservations.show', compact('reservation'));
+    }
+
+    /**
+     * Check the guest in. Allowed from the check-in date until before the check-out date.
+     */
+    public function checkIn(Request $request, Reservation $reservation): RedirectResponse
+    {
+        Gate::authorize('update', $reservation);
+
+        $today = $this->today($reservation);
+
+        if ($today < $reservation->check_in->toDateString()) {
+            return back()->withErrors([
+                'status' => 'Check-in is possible only from the check-in date (' . $reservation->check_in->format('d M Y') . ').',
+            ]);
+        }
+
+        if ($today >= $reservation->check_out->toDateString()) {
+            return back()->withErrors([
+                'status' => 'The check-out date of this reservation has already passed.',
+            ]);
+        }
+
+        $done = $this->changeStatus($request, $reservation, 'confirmed', 'checked_in', [
+            'checked_in_at' => now(),
+        ]);
+
+        if (! $done) {
+            return back()->withErrors(['status' => 'Only a confirmed reservation can be checked in.']);
+        }
+
+        return redirect()
+            ->route('company.reservations.show', $reservation)
+            ->with('success', 'Guest checked in successfully.');
+    }
+
+    /**
+     * Check the guest out. The rooms become available again for the remaining dates.
+     */
+    public function checkOut(Request $request, Reservation $reservation): RedirectResponse
+    {
+        Gate::authorize('update', $reservation);
+
+        $done = $this->changeStatus($request, $reservation, 'checked_in', 'checked_out', [
+            'checked_out_at' => now(),
+        ]);
+
+        if (! $done) {
+            return back()->withErrors(['status' => 'Only a checked-in reservation can be checked out.']);
+        }
+
+        return redirect()
+            ->route('company.reservations.show', $reservation)
+            ->with('success', 'Guest checked out successfully.');
+    }
+
+    /**
+     * Mark a confirmed reservation as no-show. Allowed only from the check-in date.
+     */
+    public function noShow(Request $request, Reservation $reservation): RedirectResponse
+    {
+        Gate::authorize('update', $reservation);
+
+        if ($this->today($reservation) < $reservation->check_in->toDateString()) {
+            return back()->withErrors([
+                'status' => 'A reservation can be marked as no-show only from the check-in date (' . $reservation->check_in->format('d M Y') . ').',
+            ]);
+        }
+
+        $done = $this->changeStatus($request, $reservation, 'confirmed', 'no_show', [
+            'no_show_at' => now(),
+        ]);
+
+        if (! $done) {
+            return back()->withErrors(['status' => 'Only a confirmed reservation can be marked as no-show.']);
+        }
+
+        return redirect()
+            ->route('company.reservations.show', $reservation)
+            ->with('success', 'Reservation marked as no-show. The rooms are available again.');
     }
 
     /**
@@ -305,29 +393,62 @@ class ReservationController extends Controller
             'cancellation_reason' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $cancelled = DB::transaction(function () use ($reservation, $validated) {
-            $fresh = Reservation::lockForUpdate()->find($reservation->id);
+        $done = $this->changeStatus($request, $reservation, 'confirmed', 'cancelled', [
+            'cancelled_at' => now(),
+            'cancellation_reason' => $validated['cancellation_reason'] ?? null,
+        ], $validated['cancellation_reason'] ?? null);
 
-            if (! $fresh || ! $fresh->isCancellable()) {
-                return false;
-            }
-
-            $fresh->update([
-                'status' => 'cancelled',
-                'cancelled_at' => now(),
-                'cancellation_reason' => $validated['cancellation_reason'] ?? null,
-            ]);
-
-            return true;
-        });
-
-        if (! $cancelled) {
+        if (! $done) {
             return back()->withErrors(['cancellation_reason' => 'Only a confirmed reservation can be cancelled.']);
         }
 
         return redirect()
             ->route('company.reservations.show', $reservation)
             ->with('success', 'Reservation cancelled. The rooms are available again.');
+    }
+
+    /**
+     * Move a reservation from one status to another.
+     *
+     * The row is locked first and the current status is checked again, so a double click
+     * or two staff members can never apply the same change twice. Every change is written
+     * to the status history.
+     */
+    private function changeStatus(
+        Request $request,
+        Reservation $reservation,
+        string $from,
+        string $to,
+        array $extra = [],
+        ?string $note = null
+    ): bool {
+        return DB::transaction(function () use ($request, $reservation, $from, $to, $extra, $note) {
+            $fresh = Reservation::lockForUpdate()->find($reservation->id);
+
+            if (! $fresh || $fresh->status !== $from) {
+                return false;
+            }
+
+            $fresh->update(['status' => $to] + $extra);
+
+            $fresh->statusHistories()->create([
+                'company_id' => $fresh->company_id,
+                'old_status' => $from,
+                'new_status' => $to,
+                'note' => $note,
+                'changed_by' => $request->user()->id,
+            ]);
+
+            return true;
+        });
+    }
+
+    /**
+     * Today's date in the property's timezone.
+     */
+    private function today(Reservation $reservation): string
+    {
+        return now($reservation->property?->timezone ?? config('app.timezone'))->toDateString();
     }
 
     /**

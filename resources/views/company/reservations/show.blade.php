@@ -177,7 +177,78 @@
                                 Reason: {{ $reservation->cancellation_reason ?: 'Not given' }}
                             </p>
                         </div>
-                    @elseif ($reservation->isCancellable())
+                    @endif
+
+                    @if ($reservation->status === 'no_show')
+                        <div class="rounded-2xl bg-amber-50/70 p-6 ring-1 ring-amber-100">
+                            <h4 class="text-sm font-semibold text-amber-700">No Show</h4>
+                            <p class="mt-2 text-sm text-slate-700">
+                                Marked as no-show on {{ $reservation->no_show_at?->format('d M Y, H:i') }}. The rooms were released.
+                            </p>
+                        </div>
+                    @endif
+
+                    {{-- Front desk actions --}}
+                    @if ($reservation->canCheckIn())
+                        <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
+                            <h4 class="text-sm font-semibold text-indigo-700">Front desk</h4>
+                            <p class="mt-1 text-sm text-slate-500">Check the guest in when they arrive, or mark the booking as no-show if they do not come.</p>
+
+                            <div class="mt-4 flex flex-wrap gap-3">
+                                <form method="POST" action="{{ route('company.reservations.check-in', $reservation) }}"
+                                    onsubmit="return confirm('Check this guest in?')">
+                                    @csrf
+                                    @method('PATCH')
+                                    <button type="submit"
+                                        class="rounded-xl bg-emerald-50 px-5 py-2.5 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-100 transition hover:bg-emerald-100">
+                                        Check In
+                                    </button>
+                                </form>
+
+                                <form method="POST" action="{{ route('company.reservations.no-show', $reservation) }}"
+                                    onsubmit="return confirm('Mark this reservation as no-show? The rooms will be released.')">
+                                    @csrf
+                                    @method('PATCH')
+                                    <button type="submit"
+                                        class="rounded-xl bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-700 ring-1 ring-amber-100 transition hover:bg-amber-100">
+                                        Mark as No-show
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($reservation->canCheckOut())
+                        <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
+                            <h4 class="text-sm font-semibold text-indigo-700">Front desk</h4>
+                            <p class="mt-1 text-sm text-slate-500">
+                                Guest checked in on {{ $reservation->checked_in_at?->format('d M Y, H:i') }}.
+                                Check the guest out when they leave.
+                            </p>
+
+                            <form method="POST" action="{{ route('company.reservations.check-out', $reservation) }}" class="mt-4"
+                                onsubmit="return confirm('Check this guest out?')">
+                                @csrf
+                                @method('PATCH')
+                                <button type="submit"
+                                    class="rounded-xl bg-indigo-50 px-5 py-2.5 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-100 transition hover:bg-indigo-100">
+                                    Check Out
+                                </button>
+                            </form>
+                        </div>
+                    @endif
+
+                    @if ($reservation->status === 'checked_out')
+                        <div class="rounded-2xl bg-slate-50 p-6 ring-1 ring-slate-200">
+                            <h4 class="text-sm font-semibold text-slate-700">Stay completed</h4>
+                            <p class="mt-2 text-sm text-slate-600">
+                                Checked in {{ $reservation->checked_in_at?->format('d M Y, H:i') }}
+                                and checked out {{ $reservation->checked_out_at?->format('d M Y, H:i') }}.
+                            </p>
+                        </div>
+                    @endif
+
+                    @if ($reservation->isCancellable())
                         <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
                             <h4 class="text-sm font-semibold text-rose-700">Cancel reservation</h4>
                             <p class="mt-1 text-sm text-slate-500">The rooms become available again for these dates.</p>
@@ -197,6 +268,48 @@
                             </form>
                         </div>
                     @endif
+
+                    {{-- Status history --}}
+                    <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
+                        <h4 class="text-sm font-semibold text-indigo-700">Status history</h4>
+
+                        <ol class="mt-5 space-y-5">
+                            @forelse ($reservation->statusHistories as $history)
+                                <li class="flex gap-4">
+                                    <span class="mt-1 h-3 w-3 shrink-0 rounded-full ring-4
+                                        {{ match ($history->new_status) {
+                                            'confirmed' => 'bg-sky-500 ring-sky-100',
+                                            'checked_in' => 'bg-emerald-500 ring-emerald-100',
+                                            'checked_out' => 'bg-slate-400 ring-slate-100',
+                                            'cancelled' => 'bg-rose-500 ring-rose-100',
+                                            'no_show' => 'bg-amber-500 ring-amber-100',
+                                            default => 'bg-slate-400 ring-slate-100',
+                                        } }}"></span>
+
+                                    <div>
+                                        <p class="text-sm font-semibold text-slate-800">
+                                            @if ($history->old_status)
+                                                {{ \App\Models\Reservation::statuses()[$history->old_status] ?? $history->old_status }}
+                                                &rarr;
+                                            @endif
+                                            {{ \App\Models\Reservation::statuses()[$history->new_status] ?? $history->new_status }}
+                                        </p>
+                                        <p class="text-xs text-slate-500">
+                                            {{ $history->created_at->format('d M Y, H:i') }}
+                                            @if ($history->user)
+                                                by {{ $history->user->name }}
+                                            @endif
+                                        </p>
+                                        @if ($history->note)
+                                            <p class="mt-1 text-sm text-slate-600">{{ $history->note }}</p>
+                                        @endif
+                                    </div>
+                                </li>
+                            @empty
+                                <li class="text-sm text-slate-500">No history yet.</li>
+                            @endforelse
+                        </ol>
+                    </div>
                 </div>
             </div>
         </div>

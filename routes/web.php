@@ -112,6 +112,12 @@ Route::middleware(['auth', 'verified', 'active.company', 'can:isCompanyAdmin'])
             ->name('reservations.store');
         Route::get('reservations/{reservation}', [ReservationController::class, 'show'])
             ->name('reservations.show');
+        Route::patch('reservations/{reservation}/check-in', [ReservationController::class, 'checkIn'])
+            ->name('reservations.check-in');
+        Route::patch('reservations/{reservation}/check-out', [ReservationController::class, 'checkOut'])
+            ->name('reservations.check-out');
+        Route::patch('reservations/{reservation}/no-show', [ReservationController::class, 'noShow'])
+            ->name('reservations.no-show');
         Route::patch('reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])
             ->name('reservations.cancel');
     });

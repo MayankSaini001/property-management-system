@@ -88,6 +88,14 @@ class GuestController extends Controller
     {
         Gate::authorize('view', $guest);
 
+        $guest->load([
+            'reservations' => function ($query) {
+                $query->with(['property', 'items.unit'])
+                    ->orderByDesc('check_in')
+                    ->orderByDesc('id');
+            },
+        ]);
+
         return view('company.guests.show', compact('guest'));
     }
 
