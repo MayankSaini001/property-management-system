@@ -1,17 +1,18 @@
 <?php
 
 use App\Http\Controllers\Company\AvailabilityController;
+use App\Http\Controllers\Company\CalendarController;
 use App\Http\Controllers\Company\GuestController;
 use App\Http\Controllers\Company\InventoryBlockController;
 use App\Http\Controllers\Company\PropertyController;
 use App\Http\Controllers\Company\ReservationController;
 use App\Http\Controllers\Company\RoomTypeController;
 use App\Http\Controllers\Company\UnitController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SuperAdmin\CompanyAdminController;
 use App\Http\Controllers\SuperAdmin\CompanyController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Company\CalendarController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -19,15 +20,7 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified', 'active.company'])->group(function () {
 
-    Route::get('/dashboard', function () {
-        $user = auth()->user();
-
-        if ($user->isSuperAdmin()) {
-            return view('dashboard');
-        }
-
-        return view('company.dashboard', ['company' => $user->company]);
-    })->name('dashboard');
+    Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -104,6 +97,10 @@ Route::middleware(['auth', 'verified', 'active.company', 'can:isCompanyAdmin'])
         Route::get('availability', [AvailabilityController::class, 'index'])
             ->name('availability.index');
 
+        // Booking calendar
+        Route::get('calendar', [CalendarController::class, 'index'])
+            ->name('calendar.index');
+
         // Reservations ("create" must stay above "{reservation}")
         Route::get('reservations', [ReservationController::class, 'index'])
             ->name('reservations.index');
@@ -121,8 +118,6 @@ Route::middleware(['auth', 'verified', 'active.company', 'can:isCompanyAdmin'])
             ->name('reservations.no-show');
         Route::patch('reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])
             ->name('reservations.cancel');
-        Route::get('calendar', [CalendarController::class, 'index'])
-            ->name('calendar.index');
     });
 
 require __DIR__ . '/auth.php';
