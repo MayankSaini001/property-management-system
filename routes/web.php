@@ -11,6 +11,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SuperAdmin\CompanyAdminController;
 use App\Http\Controllers\SuperAdmin\CompanyController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Company\CalendarController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -120,6 +121,8 @@ Route::middleware(['auth', 'verified', 'active.company', 'can:isCompanyAdmin'])
             ->name('reservations.no-show');
         Route::patch('reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])
             ->name('reservations.cancel');
+        Route::get('calendar', [CalendarController::class, 'index'])
+            ->name('calendar.index');
     });
 
 require __DIR__ . '/auth.php';
