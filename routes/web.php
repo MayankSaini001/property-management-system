@@ -101,6 +101,7 @@ Route::middleware(['auth', 'verified', 'active.company', 'can:isCompanyAdmin'])
         Route::get('calendar', [CalendarController::class, 'index'])
             ->name('calendar.index');
 
+
         // Reservations ("create" must stay above "{reservation}")
         Route::get('reservations', [ReservationController::class, 'index'])
             ->name('reservations.index');
