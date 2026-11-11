@@ -5,6 +5,7 @@ use App\Http\Controllers\Company\CalendarController;
 use App\Http\Controllers\Company\GuestController;
 use App\Http\Controllers\Company\InventoryBlockController;
 use App\Http\Controllers\Company\PropertyController;
+use App\Http\Controllers\Company\RatePlanController;
 use App\Http\Controllers\Company\ReservationController;
 use App\Http\Controllers\Company\RoomTypeController;
 use App\Http\Controllers\Company\UnitController;
@@ -101,6 +102,21 @@ Route::middleware(['auth', 'verified', 'active.company', 'can:isCompanyAdmin'])
         Route::get('calendar', [CalendarController::class, 'index'])
             ->name('calendar.index');
 
+        // Rate plans and prices ("create" must stay above "{ratePlan}")
+        Route::get('rate-plans', [RatePlanController::class, 'index'])
+            ->name('rate-plans.index');
+        Route::get('rate-plans/create', [RatePlanController::class, 'create'])
+            ->name('rate-plans.create');
+        Route::post('rate-plans', [RatePlanController::class, 'store'])
+            ->name('rate-plans.store');
+        Route::get('rate-plans/{ratePlan}/edit', [RatePlanController::class, 'edit'])
+            ->name('rate-plans.edit');
+        Route::put('rate-plans/{ratePlan}', [RatePlanController::class, 'update'])
+            ->name('rate-plans.update');
+        Route::put('rate-plans/{ratePlan}/prices', [RatePlanController::class, 'updatePrices'])
+            ->name('rate-plans.prices');
+        Route::patch('rate-plans/{ratePlan}/status', [RatePlanController::class, 'toggleStatus'])
+            ->name('rate-plans.status');
 
         // Reservations ("create" must stay above "{reservation}")
         Route::get('reservations', [ReservationController::class, 'index'])

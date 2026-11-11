@@ -17,6 +17,7 @@
         $navLinks[] = ['label' => 'Availability', 'route' => 'company.availability.index', 'active' => 'company.availability.*'];
         $navLinks[] = ['label' => 'Reservations', 'route' => 'company.reservations.index', 'active' => 'company.reservations.*'];
         $navLinks[] = ['label' => 'Calendar', 'route' => 'company.calendar.index', 'active' => 'company.calendar.*'];
+        $navLinks[] = ['label' => 'Rates', 'route' => 'company.rate-plans.index', 'active' => 'company.rate-plans.*'];
     }
 
     $roleLabel = $authUser->isSuperAdmin() ? 'Super Admin' : 'Company Admin';
