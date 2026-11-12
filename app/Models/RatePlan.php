@@ -60,4 +60,9 @@ class RatePlan extends Model
     {
         return $this->hasMany(RatePlanPrice::class);
     }
+
+    public function seasons(): HasMany
+    {
+        return $this->hasMany(RatePlanSeason::class);
+    }
 }

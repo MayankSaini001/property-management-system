@@ -6,16 +6,23 @@ use App\Http\Controllers\Controller;
 use App\Models\Property;
 use App\Models\RatePlan;
 use App\Models\RatePlanPrice;
+use App\Services\PricingService;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class RatePlanController extends Controller
 {
+    public function __construct(private PricingService $pricing)
+    {
+    }
+
     /**
      * List the rate plans of the logged-in Company Admin's company.
      */
@@ -127,9 +134,9 @@ class RatePlanController extends Controller
     }
 
     /**
-     * Show the details and the base prices of a rate plan.
+     * Show the details, the base prices, the seasons and the price calculator of a rate plan.
      */
-    public function edit(RatePlan $ratePlan): View
+    public function edit(Request $request, RatePlan $ratePlan): View
     {
         Gate::authorize('update', $ratePlan);
 
@@ -143,7 +150,60 @@ class RatePlanController extends Controller
 
         $prices = $ratePlan->prices()->get()->keyBy($isHotel ? 'room_type_id' : 'unit_id');
 
-        return view('company.rate-plans.edit', compact('ratePlan', 'property', 'isHotel', 'targets', 'prices'));
+        $seasons = $ratePlan->seasons()->with('prices')->orderBy('start_date')->get();
+
+        // Price calculator: shows the price of a stay, night by night.
+        $test = ['submitted' => false, 'errors' => [], 'target' => null, 'result' => null];
+
+        if ($request->filled('test_target') || $request->filled('test_in') || $request->filled('test_out')) {
+            $test['submitted'] = true;
+
+            $validator = Validator::make($request->all(), [
+                'test_target' => ['required', Rule::in($targets->pluck('id')->all())],
+                'test_in' => ['required', 'date'],
+                'test_out' => ['required', 'date', 'after:test_in'],
+            ], [], [
+                'test_target' => $isHotel ? 'room type' : 'unit',
+                'test_in' => 'check-in',
+                'test_out' => 'check-out',
+            ]);
+
+            $validator->after(function ($validator) use ($request) {
+                if ($validator->errors()->isEmpty()) {
+                    $nights = Carbon::parse($request->input('test_in'))
+                        ->diffInDays(Carbon::parse($request->input('test_out')));
+
+                    if ($nights > 60) {
+                        $validator->errors()->add('test_out', 'You can test up to 60 nights.');
+                    }
+                }
+            });
+
+            if ($validator->fails()) {
+                $test['errors'] = $validator->errors()->all();
+            } else {
+                $target = $targets->firstWhere('id', (int) $request->input('test_target'));
+
+                $test['target'] = $target;
+                $test['result'] = $this->pricing->quoteForTarget(
+                    $ratePlan,
+                    $isHotel ? 'room_type_id' : 'unit_id',
+                    $target->id,
+                    $request->input('test_in'),
+                    $request->input('test_out')
+                );
+            }
+        }
+
+        return view('company.rate-plans.edit', compact(
+            'ratePlan',
+            'property',
+            'isHotel',
+            'targets',
+            'prices',
+            'seasons',
+            'test'
+        ));
     }
 
     /**
