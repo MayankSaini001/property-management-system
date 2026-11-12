@@ -6,6 +6,7 @@ use App\Http\Controllers\Company\GuestController;
 use App\Http\Controllers\Company\InventoryBlockController;
 use App\Http\Controllers\Company\PropertyController;
 use App\Http\Controllers\Company\RatePlanController;
+use App\Http\Controllers\Company\RatePlanSeasonController;
 use App\Http\Controllers\Company\ReservationController;
 use App\Http\Controllers\Company\RoomTypeController;
 use App\Http\Controllers\Company\UnitController;
@@ -117,6 +118,18 @@ Route::middleware(['auth', 'verified', 'active.company', 'can:isCompanyAdmin'])
             ->name('rate-plans.prices');
         Route::patch('rate-plans/{ratePlan}/status', [RatePlanController::class, 'toggleStatus'])
             ->name('rate-plans.status');
+
+        // Seasonal prices of a rate plan
+        Route::get('rate-plans/{ratePlan}/seasons/create', [RatePlanSeasonController::class, 'create'])
+            ->name('rate-plan-seasons.create');
+        Route::post('rate-plans/{ratePlan}/seasons', [RatePlanSeasonController::class, 'store'])
+            ->name('rate-plan-seasons.store');
+        Route::get('seasons/{season}/edit', [RatePlanSeasonController::class, 'edit'])
+            ->name('rate-plan-seasons.edit');
+        Route::put('seasons/{season}', [RatePlanSeasonController::class, 'update'])
+            ->name('rate-plan-seasons.update');
+        Route::delete('seasons/{season}', [RatePlanSeasonController::class, 'destroy'])
+            ->name('rate-plan-seasons.destroy');
 
         // Reservations ("create" must stay above "{reservation}")
         Route::get('reservations', [ReservationController::class, 'index'])
