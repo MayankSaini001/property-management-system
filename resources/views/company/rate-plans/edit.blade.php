@@ -128,6 +128,159 @@
                 @endif
             </div>
 
+            {{-- Seasonal prices --}}
+            <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+                <div class="flex flex-wrap items-center justify-between gap-3 px-6 pt-6">
+                    <div>
+                        <h4 class="text-sm font-semibold text-indigo-700">Seasonal prices</h4>
+                        <p class="mt-1 text-sm text-slate-500">
+                            For festivals and peak dates. A season price replaces the base price for every night inside the dates.
+                        </p>
+                    </div>
+
+                    <a href="{{ route('company.rate-plan-seasons.create', $ratePlan) }}"
+                        class="rounded-xl bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-100 transition hover:bg-indigo-100">
+                        + Add Season
+                    </a>
+                </div>
+
+                @if ($seasons->isEmpty())
+                    <div class="px-6 py-10 text-center">
+                        <p class="text-sm font-medium text-slate-700">No seasons yet. The base prices are used for every date.</p>
+                    </div>
+                @else
+                    <div class="mt-4 overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-100">
+                            <thead class="bg-indigo-50/60">
+                                <tr>
+                                    <th class="{{ $th }}">Season</th>
+                                    <th class="{{ $th }}">Dates</th>
+                                    <th class="{{ $th }}">Nights</th>
+                                    <th class="{{ $th }}">Prices Set</th>
+                                    <th class="{{ $th }}">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach ($seasons as $season)
+                                    <tr class="transition hover:bg-indigo-50/40">
+                                        <td class="px-5 py-4 font-semibold text-slate-900">{{ $season->name }}</td>
+                                        <td class="px-5 py-4 text-sm text-slate-700">
+                                            {{ $season->start_date->format('d M Y') }} - {{ $season->end_date->format('d M Y') }}
+                                        </td>
+                                        <td class="px-5 py-4 text-sm text-slate-600">{{ (int) $season->start_date->diffInDays($season->end_date) + 1 }}</td>
+                                        <td class="px-5 py-4">
+                                            <span class="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 ring-1 ring-sky-200">
+                                                {{ $season->prices->count() }} of {{ $targets->count() }} {{ $isHotel ? 'room types' : 'units' }}
+                                            </span>
+                                        </td>
+                                        <td class="px-5 py-4">
+                                            <a href="{{ route('company.rate-plan-seasons.edit', $season) }}"
+                                                class="rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100">Edit</a>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+
+                <div class="h-4"></div>
+            </div>
+
+            {{-- Price calculator --}}
+            <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
+                <h4 class="text-sm font-semibold text-indigo-700">Price calculator</h4>
+                <p class="mt-1 text-sm text-slate-500">Check the price of a stay, night by night, before using this plan for bookings.</p>
+
+                <form method="GET" action="{{ route('company.rate-plans.edit', $ratePlan) }}"
+                    class="mt-4 grid grid-cols-1 items-end gap-4 md:grid-cols-4">
+                    <div>
+                        <label for="test_target" class="mb-1.5 block text-xs font-medium text-slate-500">{{ $isHotel ? 'Room type' : 'Villa unit' }}</label>
+                        <select id="test_target" name="test_target"
+                            class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-700 shadow-none focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100">
+                            <option value="">Select</option>
+                            @foreach ($targets as $target)
+                                <option value="{{ $target->id }}" @selected((int) request('test_target') === $target->id)>{{ $target->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="test_in" class="mb-1.5 block text-xs font-medium text-slate-500">Check-in</label>
+                        <input id="test_in" name="test_in" type="date" value="{{ request('test_in') }}"
+                            class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-700 shadow-none focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100">
+                    </div>
+
+                    <div>
+                        <label for="test_out" class="mb-1.5 block text-xs font-medium text-slate-500">Check-out</label>
+                        <input id="test_out" name="test_out" type="date" value="{{ request('test_out') }}"
+                            class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-700 shadow-none focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100">
+                    </div>
+
+                    <div>
+                        <button type="submit"
+                            class="rounded-xl bg-indigo-50 px-6 py-2.5 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-100 transition hover:bg-indigo-100">
+                            Calculate
+                        </button>
+                    </div>
+                </form>
+
+                @if ($test['submitted'])
+                    @if (count($test['errors']) > 0)
+                        <div class="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800 ring-1 ring-rose-100">
+                            <ul class="list-disc pl-5">
+                                @foreach ($test['errors'] as $message)
+                                    <li>{{ $message }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @elseif (! $test['result'])
+                        <div class="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-100">
+                            This plan has no base price for {{ $test['target']?->name }}. Set it in the base prices above.
+                        </div>
+                    @else
+                        <div class="mt-5 overflow-hidden rounded-xl ring-1 ring-slate-100">
+                            <table class="min-w-full divide-y divide-slate-100">
+                                <thead class="bg-indigo-50/60">
+                                    <tr>
+                                        <th class="{{ $th }}">Night</th>
+                                        <th class="{{ $th }}">Type</th>
+                                        <th class="{{ $th }}">Price from</th>
+                                        <th class="{{ $th }} text-right">Price ({{ $property->currency }})</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach ($test['result']['nights'] as $night)
+                                        <tr>
+                                            <td class="px-5 py-3 text-sm font-medium text-slate-800">{{ $night['date']->format('D, d M Y') }}</td>
+                                            <td class="px-5 py-3 text-sm text-slate-600">{{ ucfirst($night['type']) }}</td>
+                                            <td class="px-5 py-3 text-sm text-slate-600">
+                                                @if ($night['season'])
+                                                    <span class="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200">{{ $night['season'] }}</span>
+                                                @else
+                                                    Base price
+                                                @endif
+                                            </td>
+                                            <td class="px-5 py-3 text-right text-sm font-semibold text-slate-800">{{ number_format((float) $night['price'], 2) }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                                <tfoot class="bg-slate-50">
+                                    <tr>
+                                        <td colspan="3" class="px-5 py-3 text-sm font-semibold text-slate-700">
+                                            Total for {{ $test['result']['count'] }} night{{ $test['result']['count'] > 1 ? 's' : '' }}
+                                        </td>
+                                        <td class="px-5 py-3 text-right text-base font-bold text-indigo-700">
+                                            {{ $property->currency }} {{ number_format((float) $test['result']['total'], 2) }}
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    @endif
+                @endif
+            </div>
+
             {{-- Details --}}
             <div class="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-100">
                 <h4 class="mb-5 text-sm font-semibold text-indigo-700">Rate plan details</h4>
