@@ -184,6 +184,8 @@ class RatePlanController extends Controller
             } else {
                 $target = $targets->firstWhere('id', (int) $request->input('test_target'));
 
+
+                
                 $test['target'] = $target;
                 $test['result'] = $this->pricing->quoteForTarget(
                     $ratePlan,

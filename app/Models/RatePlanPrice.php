@@ -16,21 +16,25 @@ class RatePlanPrice extends Model
         'weekend_price',
     ];
 
+
     protected $casts = [
         'weekday_price' => 'decimal:2',
         'weekend_price' => 'decimal:2',
     ];
+
 
     public function ratePlan(): BelongsTo
     {
         return $this->belongsTo(RatePlan::class);
     }
 
+
     public function roomType(): BelongsTo
     {
         return $this->belongsTo(RoomType::class)->withTrashed();
     }
 
+    
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class)->withTrashed();

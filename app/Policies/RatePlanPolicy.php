@@ -15,6 +15,7 @@ class RatePlanPolicy
         return $user->isCompanyAdmin() && $user->company_id !== null;
     }
 
+    
     /**
      * Company Admin can create rate plans for their own company.
      */
@@ -22,6 +23,7 @@ class RatePlanPolicy
     {
         return $user->isCompanyAdmin() && $user->company_id !== null;
     }
+
 
     /**
      * Company Admin can change only rate plans and prices of their own company.
