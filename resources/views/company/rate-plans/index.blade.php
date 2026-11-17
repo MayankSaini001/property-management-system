@@ -117,14 +117,17 @@
                                         @endif
                                     </td>
 
+
                                     <td class="px-5 py-4 text-sm text-slate-700">
                                         {{ $plan->property?->name }}
                                         <div class="text-xs text-slate-400">{{ $plan->property?->currency }}</div>
                                     </td>
 
+
                                     <td class="px-5 py-4 text-sm text-slate-600">
                                         {{ \App\Models\RatePlan::mealPlans()[$plan->meal_plan] ?? $plan->meal_plan }}
                                     </td>
+
 
                                     <td class="px-5 py-4">
                                         <span class="rounded-full px-2.5 py-1 text-xs font-medium ring-1
@@ -134,6 +137,7 @@
                                         </span>
                                     </td>
 
+
                                     <td class="px-5 py-4">
                                         <span class="rounded-full px-2.5 py-1 text-xs font-medium ring-1
                                             {{ $plan->isActive() ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-slate-200' }}">
@@ -141,6 +145,7 @@
                                         </span>
                                     </td>
 
+                                    
                                     <td class="px-5 py-4">
                                         <div class="flex items-center gap-2">
                                             <a href="{{ route('company.rate-plans.edit', $plan) }}"

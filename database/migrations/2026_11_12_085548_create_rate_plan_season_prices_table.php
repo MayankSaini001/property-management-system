@@ -27,6 +27,7 @@ return new class extends Migration
         });
     }
 
+    
     public function down(): void
     {
         Schema::dropIfExists('rate_plan_season_prices');
