@@ -16,13 +16,16 @@ class RatePlanSeasonPrice extends Model
         'weekend_price',
     ];
 
+
     protected $casts = [
         'weekday_price' => 'decimal:2',
         'weekend_price' => 'decimal:2',
     ];
 
+    
     public function season(): BelongsTo
     {
         return $this->belongsTo(RatePlanSeason::class, 'season_id');
     }
+    
 }
