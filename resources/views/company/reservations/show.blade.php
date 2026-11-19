@@ -327,6 +327,8 @@
                         </div>
                     @endif
 
+
+                    
                     {{-- Status history --}}
                     <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
                         <h4 class="text-sm font-semibold text-indigo-700">Status history</h4>

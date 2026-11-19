@@ -277,11 +277,13 @@
                 select.addEventListener('change', load);
             });
 
+
             search.addEventListener('input', function () {
                 clearTimeout(timer);
                 timer = setTimeout(load, 300);
             });
 
+            
             document.getElementById('clear-reservation-filters').addEventListener('click', function () {
                 search.value = '';
                 form.querySelectorAll('select').forEach(function (select) {
