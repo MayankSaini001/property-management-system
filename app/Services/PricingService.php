@@ -30,6 +30,37 @@ class PricingService
     }
 
     /**
+     * Price of several rooms / units for the same stay.
+     * Units without a price in the plan are returned in "missing".
+     */
+    public function quoteForUnits(RatePlan $ratePlan, $units, $checkIn, $checkOut): array
+    {
+        $quotes = [];
+        $missing = [];
+        $cents = 0;
+
+        foreach ($units as $unit) {
+            $quote = $this->quote($ratePlan, $unit, $checkIn, $checkOut);
+
+            if ($quote === null) {
+                $missing[] = $unit;
+
+                continue;
+            }
+
+            $quotes[$unit->id] = $quote;
+            $cents += $quote['cents'];
+        }
+
+        return [
+            'quotes' => $quotes,
+            'missing' => $missing,
+            'cents' => $cents,
+            'total' => number_format($cents / 100, 2, '.', ''),
+        ];
+    }
+
+    /**
      * Price of one room type (room_type_id) or villa unit (unit_id) for a stay.
      *
      * The stay covers the nights from check-in to the day before check-out.

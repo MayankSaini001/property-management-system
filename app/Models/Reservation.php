@@ -20,6 +20,7 @@ class Reservation extends Model
         'company_id',
         'property_id',
         'guest_id',
+        'rate_plan_id',
         'booking_reference',
         'status',
         'source',
@@ -105,6 +106,11 @@ class Reservation extends Model
         return $this->belongsTo(Property::class)->withTrashed();
     }
 
+    public function ratePlan(): BelongsTo
+    {
+        return $this->belongsTo(RatePlan::class)->withTrashed();
+    }
+
     public function guest(): BelongsTo
     {
         return $this->belongsTo(Guest::class)->withTrashed();
@@ -118,6 +124,11 @@ class Reservation extends Model
     public function items(): HasMany
     {
         return $this->hasMany(ReservationItem::class);
+    }
+
+    public function nights(): HasMany
+    {
+        return $this->hasMany(ReservationNight::class)->orderBy('stay_date');
     }
 
     public function statusHistories(): HasMany

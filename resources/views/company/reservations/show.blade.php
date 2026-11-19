@@ -120,9 +120,16 @@
                                 <dd class="text-slate-800">{{ \App\Models\Reservation::sources()[$reservation->source] ?? ucfirst($reservation->source) }}</dd>
                             </div>
                             <div>
+                                <dt class="{{ $dt }}">Rate plan</dt>
+                                <dd class="text-slate-800">
+                                    {{ $reservation->ratePlan?->name ?? 'No rate plan (booked before pricing was added)' }}
+                                </dd>
+                            </div>
+                            <div>
                                 <dt class="{{ $dt }}">Total amount</dt>
-                                <dd class="text-slate-800">{{ $reservation->currency }} {{ number_format((float) $reservation->total_amount, 2) }}
-                                    <span class="text-xs text-slate-400">(pricing comes later)</span></dd>
+                                <dd class="text-lg font-bold text-indigo-700">
+                                    {{ $reservation->currency }} {{ number_format((float) $reservation->total_amount, 2) }}
+                                </dd>
                             </div>
                         </dl>
                     </div>
@@ -160,6 +167,57 @@
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+
+                    {{-- Price breakdown --}}
+                    <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h4 class="text-sm font-semibold text-indigo-700">Price breakdown</h4>
+                            <span class="text-sm font-bold text-slate-800">
+                                Total {{ $reservation->currency }} {{ number_format((float) $reservation->total_amount, 2) }}
+                            </span>
+                        </div>
+
+                        @if ($reservation->items->every(fn ($item) => $item->nights->isEmpty()))
+                            <p class="mt-4 rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                                No night-wise prices are saved for this booking. It was made before pricing was added.
+                            </p>
+                        @else
+                            <div class="mt-4 space-y-5">
+                                @foreach ($reservation->items as $item)
+                                    <div class="overflow-hidden rounded-xl ring-1 ring-slate-100">
+                                        <div class="flex items-center justify-between bg-indigo-50/60 px-4 py-2.5">
+                                            <p class="text-sm font-semibold text-slate-800">
+                                                {{ $item->unit?->name }}
+                                                <span class="font-normal text-slate-500">- {{ $item->unit?->roomType?->name ?? 'Villa unit' }}</span>
+                                            </p>
+                                            <p class="text-sm font-bold text-indigo-700">
+                                                {{ $reservation->currency }} {{ number_format((float) $item->total_amount, 2) }}
+                                            </p>
+                                        </div>
+
+                                        <table class="min-w-full divide-y divide-slate-100 text-sm">
+                                            <tbody class="divide-y divide-slate-100">
+                                                @foreach ($item->nights as $night)
+                                                    <tr>
+                                                        <td class="px-4 py-2 text-slate-700">{{ $night->stay_date->format('D, d M Y') }}</td>
+                                                        <td class="px-4 py-2 text-slate-500">{{ ucfirst($night->price_type) }}</td>
+                                                        <td class="px-4 py-2 text-slate-500">
+                                                            @if ($night->season_name)
+                                                                <span class="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200">{{ $night->season_name }}</span>
+                                                            @else
+                                                                Base price
+                                                            @endif
+                                                        </td>
+                                                        <td class="px-4 py-2 text-right font-medium text-slate-800">{{ number_format((float) $night->price, 2) }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
                     </div>
 
                     <div class="rounded-2xl bg-amber-50/60 p-6 ring-1 ring-amber-100">

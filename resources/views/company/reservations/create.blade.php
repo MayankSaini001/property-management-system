@@ -53,7 +53,7 @@
 
                 {{-- Step 1: search (results update automatically when all fields are filled) --}}
                 <form id="reservation-search" method="GET" action="{{ route('company.reservations.create') }}"
-                    class="grid grid-cols-1 items-end gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 md:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_0.8fr_0.8fr_auto]">
+                    class="grid grid-cols-1 items-end gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 md:grid-cols-2 xl:grid-cols-[2fr_1.5fr_1fr_1fr_0.8fr_0.8fr_auto]">
 
                     @if (request()->filled('guest'))
                         <input type="hidden" name="guest" value="{{ request('guest') }}">
@@ -66,6 +66,19 @@
                             @foreach ($properties as $property)
                                 <option value="{{ $property->id }}" @selected((string) $defaultProperty === (string) $property->id)>
                                     {{ $property->name }} ({{ \App\Models\Property::types()[$property->type] ?? $property->type }})
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="rate_plan_id" class="{{ $label }}">Rate plan</label>
+                        <select id="rate_plan_id" name="rate_plan_id" class="{{ $field }} w-full">
+                            @foreach ($ratePlans as $plan)
+                                <option value="{{ $plan->id }}" data-property="{{ $plan->property_id }}"
+                                    data-default="{{ $plan->is_default ? '1' : '0' }}"
+                                    @selected($ratePlan && $ratePlan->id === $plan->id)>
+                                    {{ $plan->name }}{{ $plan->is_default ? ' (default)' : '' }}
                                 </option>
                             @endforeach
                         </select>
@@ -133,6 +146,11 @@
                             <span class="rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-700">
                                 {{ $search['property']->name }}
                             </span>
+                            @if ($ratePlan)
+                                <span class="rounded-full bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700">
+                                    Rate plan: {{ $ratePlan->name }}
+                                </span>
+                            @endif
                             <span class="rounded-full bg-sky-50 px-3 py-1 text-sm font-medium text-sky-700">
                                 {{ $search['check_in']->format('d M') }} - {{ $search['check_out']->format('d M Y') }}
                                 ({{ $search['nights'] }} night{{ $search['nights'] > 1 ? 's' : '' }})
@@ -149,7 +167,13 @@
                             </span>
                         </div>
 
-                        @if ($search['available']->isEmpty())
+                        @if (! $ratePlan)
+                            <div class="rounded-2xl bg-amber-50 px-6 py-10 text-center ring-1 ring-amber-100">
+                                <p class="text-sm font-semibold text-amber-800">This property has no active rate plan, so the rooms have no price.</p>
+                                <a href="{{ route('company.rate-plans.create', ['property_id' => $search['property']->id]) }}"
+                                    class="mt-1 inline-block text-sm font-semibold text-amber-900 underline">Create a rate plan</a>
+                            </div>
+                        @elseif ($search['available']->isEmpty())
                             <div class="rounded-2xl bg-amber-50 px-6 py-10 text-center ring-1 ring-amber-100">
                                 <p class="text-sm font-semibold text-amber-800">No {{ $isHotel ? 'rooms' : 'villa units' }} are available for these dates.</p>
                                 <p class="mt-1 text-sm text-amber-700">Try different dates or fewer guests. The
@@ -164,6 +188,7 @@
                                 <input type="hidden" name="check_out" value="{{ $search['check_out']->toDateString() }}">
                                 <input type="hidden" name="adults" value="{{ $search['adults'] }}">
                                 <input type="hidden" name="children" value="{{ $search['children'] }}">
+                                <input type="hidden" name="rate_plan_id" value="{{ $ratePlan->id }}">
 
                                 {{-- Rooms --}}
                                 <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
@@ -187,13 +212,27 @@
 
                                                 <div class="flex flex-wrap gap-3">
                                                     @foreach ($units as $unit)
+                                                        @php $quote = $quotes[$unit->id] ?? null; @endphp
+
+                                                    @if ($quote)
                                                         <label class="cursor-pointer">
                                                             <input type="checkbox" name="unit_ids[]" value="{{ $unit->id }}"
+                                                                data-total="{{ $quote['total'] }}"
                                                                 class="peer sr-only" @checked(in_array($unit->id, $selected, true))>
-                                                            <span class="block rounded-xl bg-indigo-50 px-5 py-2.5 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-100 transition hover:bg-indigo-100 peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:ring-indigo-600">
+                                                            <span class="block rounded-xl bg-indigo-50 px-5 py-2.5 text-center text-sm font-semibold text-indigo-700 ring-1 ring-indigo-100 transition hover:bg-indigo-100 peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:ring-indigo-600">
                                                                 {{ $unit->name }}
+                                                                <span class="block text-xs font-medium opacity-80">
+                                                                    {{ $search['property']->currency }} {{ number_format((float) $quote['total'], 2) }}
+                                                                </span>
                                                             </span>
                                                         </label>
+                                                    @else
+                                                        <span class="block cursor-not-allowed rounded-xl bg-slate-100 px-5 py-2.5 text-center text-sm font-semibold text-slate-400 ring-1 ring-slate-200"
+                                                            title="No price is set for this room in the rate plan">
+                                                            {{ $unit->name }}
+                                                            <span class="block text-xs font-medium">No price</span>
+                                                        </span>
+                                                    @endif
                                                     @endforeach
                                                 </div>
                                             </div>
@@ -243,7 +282,12 @@
                                 </div>
 
                                 <div class="flex items-center justify-between">
-                                    <p class="text-xs text-slate-400">Rates and payments will be added with the Pricing and Finance modules.</p>
+                                    <div id="booking-total" data-currency="{{ $search['property']->currency }}"
+                                        class="rounded-xl bg-indigo-50 px-5 py-3 text-sm text-indigo-800 ring-1 ring-indigo-100">
+                                        <span id="booking-total-rooms">0 rooms selected</span>
+                                        -
+                                        <span class="font-bold">Total <span id="booking-total-amount">{{ $search['property']->currency }} 0.00</span></span>
+                                    </div>
 
                                     <button type="submit"
                                         class="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:from-indigo-600 hover:to-violet-600">
@@ -320,6 +364,7 @@
 
                         if (fresh) {
                             results.innerHTML = fresh.innerHTML;
+                            updateTotal();
                         }
 
                         history.replaceState(null, '', url);
@@ -350,7 +395,78 @@
                 }
             }
 
+            // Only the rate plans of the chosen property are shown.
+            const propertySelect = document.getElementById('property_id');
+            const ratePlanSelect = document.getElementById('rate_plan_id');
+
+            function syncRatePlans() {
+                if (!ratePlanSelect) {
+                    return;
+                }
+
+                const propertyId = propertySelect.value;
+                let firstMatch = null;
+                let defaultMatch = null;
+
+                Array.from(ratePlanSelect.options).forEach(function (option) {
+                    const match = option.dataset.property === propertyId;
+
+                    option.hidden = !match;
+                    option.disabled = !match;
+
+                    if (match && firstMatch === null) {
+                        firstMatch = option;
+                    }
+
+                    if (match && option.dataset.default === '1' && defaultMatch === null) {
+                        defaultMatch = option;
+                    }
+                });
+
+                const current = ratePlanSelect.options[ratePlanSelect.selectedIndex];
+
+                if (!current || current.disabled) {
+                    const pick = defaultMatch || firstMatch;
+
+                    ratePlanSelect.value = pick ? pick.value : '';
+                }
+            }
+
+            // Total of the selected rooms, added in paise / cents.
+            function updateTotal() {
+                const totalBox = document.getElementById('booking-total');
+
+                if (!totalBox) {
+                    return;
+                }
+
+                let cents = 0;
+                let count = 0;
+
+                document.querySelectorAll('#reservation-results input[name="unit_ids[]"]:checked').forEach(function (checkbox) {
+                    cents += Math.round(parseFloat(checkbox.dataset.total || '0') * 100);
+                    count++;
+                });
+
+                document.getElementById('booking-total-rooms').textContent =
+                    count + (count === 1 ? ' room selected' : ' rooms selected');
+
+                document.getElementById('booking-total-amount').textContent =
+                    totalBox.dataset.currency + ' ' +
+                    (cents / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            results.addEventListener('change', function (event) {
+                if (event.target && event.target.name === 'unit_ids[]') {
+                    updateTotal();
+                }
+            });
+
             function schedule(event) {
+                if (event && event.target === propertySelect) {
+                    syncRatePlans();
+                }
+
                 if (event && event.target === checkIn) {
                     syncDates();
                 }
@@ -369,7 +485,9 @@
                 }
             });
 
+            syncRatePlans();
             syncDates();
+            updateTotal();
         })();
     </script>
 </x-app-layout>

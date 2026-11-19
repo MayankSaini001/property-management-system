@@ -124,6 +124,7 @@
                                     <th class="{{ $th }}">Property</th>
                                     <th class="{{ $th }}">Rooms</th>
                                     <th class="{{ $th }}">Stay</th>
+                                    <th class="{{ $th }}">Total</th>
                                     <th class="{{ $th }}">Status</th>
                                     <th class="{{ $th }}">Actions</th>
                                 </tr>
@@ -161,6 +162,10 @@
                                             <div class="text-xs text-slate-400">{{ $reservation->nights() }} night{{ $reservation->nights() > 1 ? 's' : '' }}</div>
                                         </td>
 
+                                        <td class="px-5 py-4 text-sm font-semibold text-slate-800">
+                                            {{ $reservation->currency }} {{ number_format((float) $reservation->total_amount, 2) }}
+                                        </td>
+
                                         <td class="px-5 py-4">
                                             <span class="rounded-full px-2.5 py-1 text-xs font-medium ring-1 {{ $statusStyles[$reservation->status] ?? 'bg-slate-100 text-slate-600 ring-slate-200' }}">
                                                 {{ \App\Models\Reservation::statuses()[$reservation->status] ?? ucfirst($reservation->status) }}
@@ -174,7 +179,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="7" class="px-5 py-16 text-center">
+                                        <td colspan="8" class="px-5 py-16 text-center">
                                             <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-400">
                                                 <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />

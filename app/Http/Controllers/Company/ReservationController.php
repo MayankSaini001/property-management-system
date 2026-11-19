@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Company;
 use App\Http\Controllers\Controller;
 use App\Models\Guest;
 use App\Models\Property;
+use App\Models\RatePlan;
 use App\Models\Reservation;
 use App\Models\ReservationItem;
+use App\Models\ReservationNight;
 use App\Models\Unit;
 use App\Services\AvailabilityService;
+use App\Services\PricingService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,8 +27,10 @@ class ReservationController extends Controller
 {
     private const MAX_NIGHTS = 60;
 
-    public function __construct(private AvailabilityService $availability)
-    {
+    public function __construct(
+        private AvailabilityService $availability,
+        private PricingService $pricing
+    ) {
     }
 
     /**
@@ -107,12 +112,24 @@ class ReservationController extends Controller
             ->limit(500)
             ->get();
 
+        // Active rate plans of the active properties (the page shows the ones of the chosen property).
+        $ratePlans = RatePlan::with('property')
+            ->where('company_id', $companyId)
+            ->where('status', 'active')
+            ->whereIn('property_id', $properties->pluck('id'))
+            ->orderBy('property_id')
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
+
         $submitted = $request->filled('property_id')
             || $request->filled('check_in')
             || $request->filled('check_out');
 
         $search = null;
         $searchErrors = [];
+        $ratePlan = null;
+        $quotes = [];
 
         if ($submitted) {
             $property = $properties->firstWhere('id', (int) $request->input('property_id'));
@@ -120,6 +137,7 @@ class ReservationController extends Controller
 
             $validator = Validator::make($request->all(), [
                 'property_id' => ['required', Rule::in($properties->pluck('id')->all())],
+                'rate_plan_id' => ['nullable', 'integer'],
                 'check_in' => ['required', 'date', 'after_or_equal:' . $today],
                 'check_out' => ['required', 'date', 'after:check_in'],
                 'adults' => ['required', 'integer', 'min:1', 'max:20'],
@@ -147,12 +165,27 @@ class ReservationController extends Controller
                     (int) $request->input('adults'),
                     (int) $request->input('children', 0)
                 );
+
+                // The chosen rate plan of this property, or its default plan.
+                $ratePlan = $this->resolveRatePlan($ratePlans, $property->id, $request->input('rate_plan_id'));
+
+                if ($ratePlan) {
+                    $quotes = $this->pricing->quoteForUnits(
+                        $ratePlan,
+                        $search['available'],
+                        $request->input('check_in'),
+                        $request->input('check_out')
+                    )['quotes'];
+                }
             }
         }
 
         return view('company.reservations.create', compact(
             'properties',
             'guests',
+            'ratePlans',
+            'ratePlan',
+            'quotes',
             'search',
             'searchErrors',
             'submitted'
@@ -188,6 +221,14 @@ class ReservationController extends Controller
                     ->where('company_id', $companyId)
                     ->whereNull('deleted_at'),
             ],
+            'rate_plan_id' => [
+                'required',
+                Rule::exists('rate_plans', 'id')
+                    ->where('company_id', $companyId)
+                    ->where('property_id', $request->input('property_id'))
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at'),
+            ],
             'check_in' => ['required', 'date', 'after_or_equal:' . $today],
             'check_out' => ['required', 'date', 'after:check_in'],
             'adults' => ['required', 'integer', 'min:1', 'max:20'],
@@ -199,6 +240,8 @@ class ReservationController extends Controller
         ], [
             'unit_ids.required' => 'Please select at least one room or unit.',
             'unit_ids.min' => 'Please select at least one room or unit.',
+            'rate_plan_id.required' => 'Please select a rate plan.',
+            'rate_plan_id.exists' => 'The selected rate plan is not available for this property.',
         ]);
 
         $checkIn = $validated['check_in'];
@@ -243,12 +286,26 @@ class ReservationController extends Controller
                 }
             }
 
-            // 3. Save the reservation and its rooms.
+            // 3. Work out the price of every room from the rate plan, with the latest prices.
+            $ratePlan = RatePlan::with('property')->find($validated['rate_plan_id']);
+
+            $pricing = $this->pricing->quoteForUnits($ratePlan, $units, $checkIn, $checkOut);
+
+            if (! empty($pricing['missing'])) {
+                $names = collect($pricing['missing'])->pluck('name')->implode(', ');
+
+                throw ValidationException::withMessages([
+                    'unit_ids' => 'No price is set in this rate plan for: ' . $names . '.',
+                ]);
+            }
+
+            // 4. Save the reservation and its rooms.
             // company_id, property and created_by come from the server, never from the form.
             $reservation = Reservation::create([
                 'company_id' => $property->company_id,
                 'property_id' => $property->id,
                 'guest_id' => $validated['guest_id'],
+                'rate_plan_id' => $ratePlan->id,
                 'booking_reference' => $this->makeReference(),
                 'status' => 'confirmed',
                 'source' => $validated['source'],
@@ -257,13 +314,15 @@ class ReservationController extends Controller
                 'adults' => $adults * $units->count(),
                 'children' => $children * $units->count(),
                 'currency' => $property->currency,
-                'total_amount' => 0,
+                'total_amount' => $pricing['total'],
                 'notes' => $validated['notes'] ?? null,
                 'created_by' => $request->user()->id,
             ]);
 
             foreach ($units as $unit) {
-                ReservationItem::create([
+                $quote = $pricing['quotes'][$unit->id];
+
+                $item = ReservationItem::create([
                     'company_id' => $property->company_id,
                     'reservation_id' => $reservation->id,
                     'unit_id' => $unit->id,
@@ -271,7 +330,28 @@ class ReservationController extends Controller
                     'check_out' => $checkOut,
                     'adults' => $adults,
                     'children' => $children,
+                    'total_amount' => $quote['total'],
                 ]);
+
+                // The price of every night is saved with the booking, so later price changes never change it.
+                $nightRows = [];
+
+                foreach ($quote['nights'] as $night) {
+                    $nightRows[] = [
+                        'company_id' => $property->company_id,
+                        'reservation_id' => $reservation->id,
+                        'reservation_item_id' => $item->id,
+                        'unit_id' => $unit->id,
+                        'stay_date' => $night['date']->toDateString(),
+                        'price' => $night['price'],
+                        'price_type' => $night['type'],
+                        'season_name' => $night['season'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+
+                ReservationNight::insert($nightRows);
             }
 
             $reservation->statusHistories()->create([
@@ -297,7 +377,15 @@ class ReservationController extends Controller
     {
         Gate::authorize('view', $reservation);
 
-        $reservation->load(['guest', 'property', 'creator', 'items.unit.roomType', 'statusHistories.user']);
+        $reservation->load([
+            'guest',
+            'property',
+            'creator',
+            'ratePlan',
+            'items.unit.roomType',
+            'items.nights',
+            'statusHistories.user',
+        ]);
 
         return view('company.reservations.show', compact('reservation'));
     }
@@ -449,6 +537,18 @@ class ReservationController extends Controller
     private function today(Reservation $reservation): string
     {
         return now($reservation->property?->timezone ?? config('app.timezone'))->toDateString();
+    }
+
+    /**
+     * The rate plan chosen on the page if it belongs to the property, otherwise the default one.
+     */
+    private function resolveRatePlan($ratePlans, int $propertyId, $requestedId): ?RatePlan
+    {
+        $forProperty = $ratePlans->where('property_id', $propertyId);
+
+        return $forProperty->firstWhere('id', (int) $requestedId)
+            ?? $forProperty->firstWhere('is_default', true)
+            ?? $forProperty->first();
     }
 
     /**
