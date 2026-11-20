@@ -39,6 +39,8 @@ class Reservation extends Model
         'created_by',
     ];
 
+
+
     protected $casts = [
         'check_in' => 'date',
         'check_out' => 'date',
