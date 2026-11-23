@@ -71,66 +71,79 @@ class Reservation extends Model
         ];
     }
 
+
     public function nights(): int
     {
         return (int) $this->check_in->diffInDays($this->check_out);
     }
+
 
     public function isCancellable(): bool
     {
         return $this->status === 'confirmed';
     }
 
+
     public function canCheckIn(): bool
     {
         return $this->status === 'confirmed';
     }
+
 
     public function canMarkNoShow(): bool
     {
         return $this->status === 'confirmed';
     }
 
+
     public function canCheckOut(): bool
     {
         return $this->status === 'checked_in';
     }
+
 
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
     }
 
+
     public function property(): BelongsTo
     {
         return $this->belongsTo(Property::class)->withTrashed();
     }
+
 
     public function ratePlan(): BelongsTo
     {
         return $this->belongsTo(RatePlan::class)->withTrashed();
     }
 
+
     public function guest(): BelongsTo
     {
         return $this->belongsTo(Guest::class)->withTrashed();
     }
+
 
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
+
     public function items(): HasMany
     {
         return $this->hasMany(ReservationItem::class);
     }
+
 
     public function nightPrices(): HasMany
     {
         return $this->hasMany(ReservationNight::class)->orderBy('stay_date');
     }
 
+    
     public function statusHistories(): HasMany
     {
         return $this->hasMany(ReservationStatusHistory::class)->orderBy('id');
