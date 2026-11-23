@@ -39,8 +39,6 @@ class Reservation extends Model
         'created_by',
     ];
 
-
-
     protected $casts = [
         'check_in' => 'date',
         'check_out' => 'date',
@@ -128,7 +126,7 @@ class Reservation extends Model
         return $this->hasMany(ReservationItem::class);
     }
 
-    public function nights(): HasMany
+    public function nightPrices(): HasMany
     {
         return $this->hasMany(ReservationNight::class)->orderBy('stay_date');
     }
