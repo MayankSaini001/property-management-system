@@ -44,6 +44,11 @@ class ReservationController extends Controller
 
         $reservations = Reservation::where('company_id', $companyId)
             ->with(['guest', 'property', 'items.unit'])
+            ->withSum([
+                'payments as paid_total' => function ($payments) {
+                    $payments->where('type', 'payment')->whereNull('voided_at');
+                },
+            ], 'amount')
             ->when($request->filled('q'), function ($query) use ($request) {
                 $term = '%' . trim($request->input('q')) . '%';
 
@@ -385,6 +390,8 @@ class ReservationController extends Controller
             'items.unit.roomType',
             'items.nights',
             'statusHistories.user',
+            'payments.creator',
+            'payments.voider',
         ]);
 
         return view('company.reservations.show', compact('reservation'));
@@ -551,6 +558,7 @@ class ReservationController extends Controller
             ?? $forProperty->first();
     }
 
+    
     /**
      * Unique booking reference, for example BK-261029-A7K2P.
      */
