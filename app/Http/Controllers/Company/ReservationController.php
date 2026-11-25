@@ -558,7 +558,6 @@ class ReservationController extends Controller
             ?? $forProperty->first();
     }
 
-    
     /**
      * Unique booking reference, for example BK-261029-A7K2P.
      */

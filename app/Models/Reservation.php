@@ -189,7 +189,6 @@ class Reservation extends Model
         return $this->hasMany(Payment::class)->orderByDesc('paid_on')->orderByDesc('id');
     }
 
-    
     public function statusHistories(): HasMany
     {
         return $this->hasMany(ReservationStatusHistory::class)->orderBy('id');
