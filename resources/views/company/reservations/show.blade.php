@@ -220,6 +220,152 @@
                         @endif
                     </div>
 
+                    {{-- Payments --}}
+                    @php
+                        $payStatus = $reservation->paymentStatus();
+                        $payStyles = [
+                            'not_priced' => 'bg-slate-100 text-slate-600 ring-slate-200',
+                            'unpaid' => 'bg-rose-50 text-rose-700 ring-rose-200',
+                            'partial' => 'bg-amber-50 text-amber-700 ring-amber-200',
+                            'paid' => 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+                        ];
+                        $totalCents = $reservation->totalCents();
+                        $paidCents = $reservation->paidCents();
+                        $balanceCents = $reservation->balanceCents();
+                        $payable = in_array($reservation->status, ['confirmed', 'checked_in', 'checked_out'], true);
+                        $todayDate = now($reservation->property?->timezone ?? config('app.timezone'))->toDateString();
+                        $payInput = 'w-full rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-700 shadow-none focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100';
+                    @endphp
+
+                    <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h4 class="text-sm font-semibold text-indigo-700">Payments</h4>
+                            <span class="rounded-full px-3 py-1 text-xs font-semibold ring-1 {{ $payStyles[$payStatus] }}">
+                                {{ \App\Models\Reservation::paymentStatuses()[$payStatus] }}
+                            </span>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-3 gap-3">
+                            <div class="rounded-xl bg-slate-50 px-4 py-3">
+                                <p class="text-xs uppercase tracking-wide text-slate-400">Total</p>
+                                <p class="mt-1 text-base font-bold text-slate-800">{{ $reservation->currency }} {{ number_format($totalCents / 100, 2) }}</p>
+                            </div>
+                            <div class="rounded-xl bg-emerald-50/70 px-4 py-3">
+                                <p class="text-xs uppercase tracking-wide text-emerald-700/70">Paid</p>
+                                <p class="mt-1 text-base font-bold text-emerald-700">{{ $reservation->currency }} {{ number_format($paidCents / 100, 2) }}</p>
+                            </div>
+                            <div class="rounded-xl {{ $balanceCents > 0 ? 'bg-rose-50/70' : 'bg-slate-50' }} px-4 py-3">
+                                <p class="text-xs uppercase tracking-wide {{ $balanceCents > 0 ? 'text-rose-700/70' : 'text-slate-400' }}">Balance</p>
+                                <p class="mt-1 text-base font-bold {{ $balanceCents > 0 ? 'text-rose-700' : 'text-slate-800' }}">{{ $reservation->currency }} {{ number_format($balanceCents / 100, 2) }}</p>
+                            </div>
+                        </div>
+
+                        @if ($payable && $totalCents > 0 && $balanceCents > 0)
+                            <form method="POST" action="{{ route('company.payments.store', $reservation) }}"
+                                class="mt-5 grid grid-cols-1 gap-4 rounded-xl border border-slate-100 bg-slate-50/60 p-4 sm:grid-cols-2">
+                                @csrf
+
+                                <div>
+                                    <label for="pay_amount" class="mb-1.5 block text-xs font-medium text-slate-500">Amount ({{ $reservation->currency }}) *</label>
+                                    <input id="pay_amount" name="amount" type="number" step="0.01" min="0.01" max="{{ number_format($balanceCents / 100, 2, '.', '') }}"
+                                        required value="{{ old('amount', number_format($balanceCents / 100, 2, '.', '')) }}" class="{{ $payInput }}">
+                                    <p class="mt-1 text-xs text-slate-400">Up to the balance. Enter a smaller amount for a deposit or a part payment.</p>
+                                </div>
+
+                                <div>
+                                    <label for="pay_method" class="mb-1.5 block text-xs font-medium text-slate-500">Method *</label>
+                                    <select id="pay_method" name="method" required class="{{ $payInput }}">
+                                        @foreach (\App\Models\Payment::methods() as $value => $text)
+                                            <option value="{{ $value }}" @selected(old('method', 'cash') === $value)>{{ $text }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label for="pay_paid_on" class="mb-1.5 block text-xs font-medium text-slate-500">Payment date *</label>
+                                    <input id="pay_paid_on" name="paid_on" type="date" required max="{{ $todayDate }}"
+                                        value="{{ old('paid_on', $todayDate) }}" class="{{ $payInput }}">
+                                </div>
+
+                                <div>
+                                    <label for="pay_reference" class="mb-1.5 block text-xs font-medium text-slate-500">Reference (UPI id, cheque no.)</label>
+                                    <input id="pay_reference" name="reference" type="text" maxlength="100"
+                                        value="{{ old('reference') }}" class="{{ $payInput }}">
+                                </div>
+
+                                <div class="sm:col-span-2">
+                                    <label for="pay_notes" class="mb-1.5 block text-xs font-medium text-slate-500">Notes</label>
+                                    <input id="pay_notes" name="notes" type="text" maxlength="500"
+                                        value="{{ old('notes') }}" class="{{ $payInput }}" placeholder="e.g. Advance received at check-in">
+                                </div>
+
+                                <div class="sm:col-span-2">
+                                    <button type="submit"
+                                        class="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-indigo-600 hover:to-violet-600">
+                                        Record Payment
+                                    </button>
+                                </div>
+                            </form>
+                        @elseif (! $payable)
+                            <p class="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">Payments cannot be added to a cancelled or no-show reservation.</p>
+                        @elseif ($totalCents <= 0)
+                            <p class="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">This reservation has no price (booked before pricing was added), so payments cannot be added.</p>
+                        @else
+                            <p class="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">This reservation is fully paid.</p>
+                        @endif
+
+                        @if ($reservation->payments->isNotEmpty())
+                            <div class="mt-5 overflow-x-auto rounded-xl ring-1 ring-slate-100">
+                                <table class="min-w-full divide-y divide-slate-100 text-sm">
+                                    <thead class="bg-indigo-50/60">
+                                        <tr>
+                                            <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-indigo-900/60">Date</th>
+                                            <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-indigo-900/60">Receipt</th>
+                                            <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-indigo-900/60">Method</th>
+                                            <th class="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-indigo-900/60">Amount</th>
+                                            <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-indigo-900/60"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @foreach ($reservation->payments as $payment)
+                                            <tr class="{{ $payment->isVoided() ? 'opacity-60' : '' }}">
+                                                <td class="px-4 py-3 text-slate-700">{{ $payment->paid_on->format('d M Y') }}</td>
+                                                <td class="px-4 py-3">
+                                                    <span class="font-semibold text-slate-800">{{ $payment->receipt_number }}</span>
+                                                    @if ($payment->reference)
+                                                        <div class="text-xs text-slate-400">Ref: {{ $payment->reference }}</div>
+                                                    @endif
+                                                    @if ($payment->notes)
+                                                        <div class="text-xs text-slate-400">{{ $payment->notes }}</div>
+                                                    @endif
+                                                    @if ($payment->isVoided())
+                                                        <div class="text-xs text-rose-600">Voided: {{ $payment->void_reason }}</div>
+                                                    @endif
+                                                </td>
+                                                <td class="px-4 py-3 text-slate-600">{{ \App\Models\Payment::methods()[$payment->method] ?? $payment->method }}</td>
+                                                <td class="px-4 py-3 text-right font-bold text-slate-900 {{ $payment->isVoided() ? 'line-through' : '' }}">
+                                                    {{ $payment->currency }} {{ number_format((float) $payment->amount, 2) }}
+                                                </td>
+                                                <td class="px-4 py-3 text-right">
+                                                    @if (! $payment->isVoided())
+                                                        <form method="POST" action="{{ route('company.payments.void', $payment) }}"
+                                                            onsubmit="const reason = prompt('Reason for voiding this payment?'); if (!reason) { return false; } this.void_reason.value = reason; return true;">
+                                                            @csrf
+                                                            @method('PATCH')
+                                                            <input type="hidden" name="void_reason" value="">
+                                                            <button type="submit"
+                                                                class="rounded-lg bg-rose-50 px-3 py-1 text-xs font-medium text-rose-600 transition hover:bg-rose-100">Void</button>
+                                                        </form>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @endif
+                    </div>
+
                     <div class="rounded-2xl bg-amber-50/60 p-6 ring-1 ring-amber-100">
                         <h4 class="text-sm font-semibold text-amber-700">Notes</h4>
                         <p class="mt-3 whitespace-pre-line text-sm text-slate-700">{{ $reservation->notes ?: 'No notes added.' }}</p>
@@ -327,8 +473,6 @@
                         </div>
                     @endif
 
-
-                    
                     {{-- Status history --}}
                     <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
                         <h4 class="text-sm font-semibold text-indigo-700">Status history</h4>

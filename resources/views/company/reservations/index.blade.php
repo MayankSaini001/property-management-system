@@ -2,6 +2,12 @@
     $field = 'rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-700 shadow-none focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100';
     $th = 'px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-indigo-900/60';
     $softBtn = 'rounded-lg px-3 py-1.5 text-sm font-medium transition';
+    $payStyles = [
+        'not_priced' => 'bg-slate-100 text-slate-600 ring-slate-200',
+        'unpaid' => 'bg-rose-50 text-rose-700 ring-rose-200',
+        'partial' => 'bg-amber-50 text-amber-700 ring-amber-200',
+        'paid' => 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    ];
     $filtersOn = request()->filled('q') || request()->filled('status') || request()->filled('property_id');
 
     $statusStyles = [
@@ -125,6 +131,7 @@
                                     <th class="{{ $th }}">Rooms</th>
                                     <th class="{{ $th }}">Stay</th>
                                     <th class="{{ $th }}">Total</th>
+                                    <th class="{{ $th }}">Payment</th>
                                     <th class="{{ $th }}">Status</th>
                                     <th class="{{ $th }}">Actions</th>
                                 </tr>
@@ -167,6 +174,22 @@
                                         </td>
 
                                         <td class="px-5 py-4">
+                                            @if (in_array($reservation->status, ['cancelled', 'no_show'], true))
+                                                <span class="text-sm text-slate-400">-</span>
+                                            @else
+                                                @php $payStatus = $reservation->paymentStatus(); @endphp
+                                                <span class="rounded-full px-2.5 py-1 text-xs font-medium ring-1 {{ $payStyles[$payStatus] }}">
+                                                    {{ \App\Models\Reservation::paymentStatuses()[$payStatus] }}
+                                                </span>
+                                                @if (in_array($payStatus, ['unpaid', 'partial'], true))
+                                                    <div class="mt-1 text-xs text-slate-400">
+                                                        Balance {{ $reservation->currency }} {{ number_format($reservation->balanceCents() / 100, 2) }}
+                                                    </div>
+                                                @endif
+                                            @endif
+                                        </td>
+
+                                        <td class="px-5 py-4">
                                             <span class="rounded-full px-2.5 py-1 text-xs font-medium ring-1 {{ $statusStyles[$reservation->status] ?? 'bg-slate-100 text-slate-600 ring-slate-200' }}">
                                                 {{ \App\Models\Reservation::statuses()[$reservation->status] ?? ucfirst($reservation->status) }}
                                             </span>
@@ -179,7 +202,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="8" class="px-5 py-16 text-center">
+                                        <td colspan="9" class="px-5 py-16 text-center">
                                             <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-400">
                                                 <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
@@ -277,13 +300,11 @@
                 select.addEventListener('change', load);
             });
 
-
             search.addEventListener('input', function () {
                 clearTimeout(timer);
                 timer = setTimeout(load, 300);
             });
 
-            
             document.getElementById('clear-reservation-filters').addEventListener('click', function () {
                 search.value = '';
                 form.querySelectorAll('select').forEach(function (select) {

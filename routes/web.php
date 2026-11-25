@@ -4,6 +4,7 @@ use App\Http\Controllers\Company\AvailabilityController;
 use App\Http\Controllers\Company\CalendarController;
 use App\Http\Controllers\Company\GuestController;
 use App\Http\Controllers\Company\InventoryBlockController;
+use App\Http\Controllers\Company\PaymentController;
 use App\Http\Controllers\Company\PropertyController;
 use App\Http\Controllers\Company\RatePlanController;
 use App\Http\Controllers\Company\RatePlanSeasonController;
@@ -148,6 +149,14 @@ Route::middleware(['auth', 'verified', 'active.company', 'can:isCompanyAdmin'])
             ->name('reservations.no-show');
         Route::patch('reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])
             ->name('reservations.cancel');
+
+        // Payments
+        Route::get('payments', [PaymentController::class, 'index'])
+            ->name('payments.index');
+        Route::post('reservations/{reservation}/payments', [PaymentController::class, 'store'])
+            ->name('payments.store');
+        Route::patch('payments/{payment}/void', [PaymentController::class, 'void'])
+            ->name('payments.void');
     });
 
 require __DIR__ . '/auth.php';
