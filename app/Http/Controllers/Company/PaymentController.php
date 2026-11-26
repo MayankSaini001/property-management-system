@@ -23,7 +23,7 @@ class PaymentController extends Controller
     private const PAYABLE_STATUSES = ['confirmed', 'checked_in', 'checked_out'];
 
     /**
-     * List the payments of the logged-in Company Admin's company, with live search and filters.
+     * List the payments and refunds of the logged-in Company Admin's company, with live search and filters.
      */
     public function index(Request $request): View
     {
@@ -55,6 +55,9 @@ class PaymentController extends Controller
                     $query->where('method', $request->input('method'));
                 }
             )
+            ->when(in_array($request->input('type'), ['payment', 'refund'], true), function ($query) use ($request) {
+                $query->where('type', $request->input('type'));
+            })
             ->when($request->input('status') === 'voided', function ($query) {
                 $query->whereNotNull('voided_at');
             })
@@ -72,23 +75,27 @@ class PaymentController extends Controller
         $properties = Property::where('company_id', $companyId)->orderBy('name')->get();
 
         // Summary numbers for the cards (not affected by the filters). Grouped by currency.
-        $valid = function () use ($companyId) {
-            return Payment::where('company_id', $companyId)->where('type', 'payment')->whereNull('voided_at');
+        $notVoided = function () use ($companyId) {
+            return Payment::where('company_id', $companyId)->whereNull('voided_at');
         };
 
-        $totals = function ($query) {
+        $total = function ($query) {
             return $query->selectRaw('currency, SUM(amount) as total')
                 ->groupBy('currency')
                 ->pluck('total', 'currency');
         };
 
+        // Net money = payments minus refunds.
+        $net = function ($query) {
+            return $query->selectRaw("currency, SUM(CASE WHEN type = 'refund' THEN -amount ELSE amount END) as total")
+                ->groupBy('currency')
+                ->pluck('total', 'currency');
+        };
+
         $stats = [
-            'received' => $totals($valid()),
-            'today' => $totals($valid()->whereDate('paid_on', now()->toDateString())),
-            'month' => $totals($valid()->whereBetween('paid_on', [
-                now()->startOfMonth()->toDateString(),
-                now()->toDateString(),
-            ])),
+            'net' => $net($notVoided()),
+            'refunded' => $total($notVoided()->where('type', 'refund')),
+            'today' => $net($notVoided()->whereDate('paid_on', now()->toDateString())),
             'voided' => Payment::where('company_id', $companyId)->whereNotNull('voided_at')->count(),
         ];
 
@@ -142,20 +149,11 @@ class PaymentController extends Controller
                 ]);
             }
 
-            // company, property, currency and user come from the server, never from the form.
-            return Payment::create([
-                'company_id' => $fresh->company_id,
-                'property_id' => $fresh->property_id,
-                'reservation_id' => $fresh->id,
-                'receipt_number' => $this->makeReceiptNumber(),
-                'type' => 'payment',
-                'amount' => number_format($amountCents / 100, 2, '.', ''),
-                'currency' => $fresh->currency,
+            return $this->createEntry($request, $fresh, 'payment', $amountCents, [
                 'method' => $validated['method'],
                 'paid_on' => $validated['paid_on'],
                 'reference' => $validated['reference'] ?? null,
                 'notes' => $validated['notes'] ?? null,
-                'created_by' => $request->user()->id,
             ]);
         });
 
@@ -166,7 +164,56 @@ class PaymentController extends Controller
     }
 
     /**
-     * Void a payment that was entered by mistake. The money no longer counts as received.
+     * Record a refund. It can never be more than the money held for the booking.
+     */
+    public function refund(Request $request, Reservation $reservation): RedirectResponse
+    {
+        Gate::authorize('update', $reservation);
+
+        $today = now($reservation->property?->timezone ?? config('app.timezone'))->toDateString();
+
+        $validated = $request->validate([
+            'refund_amount' => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
+            'refund_method' => ['required', Rule::in(array_keys(Payment::methods()))],
+            'refund_paid_on' => ['required', 'date', 'before_or_equal:' . $today],
+            'refund_reference' => ['nullable', 'string', 'max:100'],
+            'refund_reason' => ['required', 'string', 'max:500'],
+        ], [
+            'refund_amount.required' => 'Please enter the refund amount.',
+            'refund_paid_on.before_or_equal' => 'The refund date cannot be in the future.',
+            'refund_reason.required' => 'Please give the reason for the refund.',
+        ]);
+
+        $amountCents = (int) round(((float) $validated['refund_amount']) * 100);
+
+        $refund = DB::transaction(function () use ($request, $reservation, $validated, $amountCents) {
+            $fresh = Reservation::lockForUpdate()->find($reservation->id);
+
+            $held = $fresh->paidCents();
+
+            if ($amountCents > $held) {
+                throw ValidationException::withMessages([
+                    'refund_amount' => 'The refund is more than the money held for this booking (' . $fresh->currency . ' ' . number_format($held / 100, 2) . ').',
+                ]);
+            }
+
+            return $this->createEntry($request, $fresh, 'refund', $amountCents, [
+                'method' => $validated['refund_method'],
+                'paid_on' => $validated['refund_paid_on'],
+                'reference' => $validated['refund_reference'] ?? null,
+                'notes' => $validated['refund_reason'],
+            ]);
+        });
+
+        return redirect()
+            ->route('company.reservations.show', $reservation)
+            ->with('success', 'Refund of ' . $refund->currency . ' ' . number_format((float) $refund->amount, 2)
+                . ' recorded. Voucher ' . $refund->receipt_number . '.');
+    }
+
+    /**
+     * Void a payment or refund that was entered by mistake. It no longer counts.
+     * A payment cannot be voided while the remaining money would be less than the refunds already given.
      */
     public function void(Request $request, Payment $payment): RedirectResponse
     {
@@ -175,14 +222,26 @@ class PaymentController extends Controller
         $validated = $request->validate([
             'void_reason' => ['required', 'string', 'max:500'],
         ], [
-            'void_reason.required' => 'Please give a reason for voiding the payment.',
+            'void_reason.required' => 'Please give a reason for voiding.',
         ]);
 
-        $done = DB::transaction(function () use ($request, $payment, $validated) {
+        $result = DB::transaction(function () use ($request, $payment, $validated) {
+            // Same order everywhere: reservation first, then the payment.
+            $reservation = Reservation::lockForUpdate()->find($payment->reservation_id);
             $fresh = Payment::lockForUpdate()->find($payment->id);
 
             if (! $fresh || $fresh->voided_at !== null) {
-                return false;
+                return 'already';
+            }
+
+            if ($fresh->type === 'payment' && $reservation) {
+                $after = $reservation->receivedCents()
+                    - (int) round(((float) $fresh->amount) * 100)
+                    - $reservation->refundedCents();
+
+                if ($after < 0) {
+                    return 'refund';
+                }
             }
 
             $fresh->update([
@@ -191,23 +250,62 @@ class PaymentController extends Controller
                 'voided_by' => $request->user()->id,
             ]);
 
-            return true;
+            return 'ok';
         });
 
-        if (! $done) {
-            return back()->withErrors(['void_reason' => 'This payment is already voided.']);
+        if ($result === 'already') {
+            return back()->withErrors(['void_reason' => 'This entry is already voided.']);
         }
 
-        return back()->with('success', 'Payment ' . $payment->receipt_number . ' voided.');
+        if ($result === 'refund') {
+            return back()->withErrors([
+                'void_reason' => 'A refund has been given against this payment. Void the refund first.',
+            ]);
+        }
+
+        return back()->with('success', $payment->receipt_number . ' voided.');
     }
 
     /**
-     * Unique receipt number, for example RC-261105-K3P9X.
+     * Printable receipt of a payment, or voucher of a refund.
      */
-    private function makeReceiptNumber(): string
+    public function receipt(Payment $payment): View
+    {
+        Gate::authorize('view', $payment);
+
+        $payment->load(['reservation.guest', 'reservation.company', 'property', 'creator']);
+
+        return view('company.payments.receipt', compact('payment'));
+    }
+
+    /**
+     * Save a payment or refund. Company, property, currency and user come from the server, never from the form.
+     */
+    private function createEntry(Request $request, Reservation $reservation, string $type, int $amountCents, array $data): Payment
+    {
+        return Payment::create([
+            'company_id' => $reservation->company_id,
+            'property_id' => $reservation->property_id,
+            'reservation_id' => $reservation->id,
+            'receipt_number' => $this->makeReceiptNumber($type === 'refund' ? 'RF' : 'RC'),
+            'type' => $type,
+            'amount' => number_format($amountCents / 100, 2, '.', ''),
+            'currency' => $reservation->currency,
+            'method' => $data['method'],
+            'paid_on' => $data['paid_on'],
+            'reference' => $data['reference'],
+            'notes' => $data['notes'],
+            'created_by' => $request->user()->id,
+        ]);
+    }
+
+    /**
+     * Unique number, for example RC-261105-K3P9X for a payment or RF-261105-K3P9X for a refund.
+     */
+    private function makeReceiptNumber(string $prefix): string
     {
         do {
-            $number = 'RC-' . now()->format('ymd') . '-' . strtoupper(Str::random(5));
+            $number = $prefix . '-' . now()->format('ymd') . '-' . strtoupper(Str::random(5));
         } while (Payment::where('receipt_number', $number)->exists());
 
         return $number;
