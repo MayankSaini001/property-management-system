@@ -299,6 +299,7 @@ class PaymentController extends Controller
         ]);
     }
 
+    
     /**
      * Unique number, for example RC-261105-K3P9X for a payment or RF-261105-K3P9X for a refund.
      */
